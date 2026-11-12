@@ -77,6 +77,106 @@ public sealed class SolarForecastTests
     }
 
     [Fact]
+    public async Task GetTomorrowIrradianceAsync_CalculatesProductionAndPartialBatteryTargetSoc()
+    {
+        // Arrange: Total irradiance = 1500 W/m2 -> 1.5 kWh/m2
+        // SystemPeakPowerKwp = 5.0, PerformanceRatio = 0.8 -> EstimatedProductionKwh = 1.5 * 5.0 * 0.8 = 6.0 kWh
+        // ExpectedDailyConsumptionKwh = 10.0 -> Deficit = 4.0 kWh -> 40% of 10 kWh battery
+        // MinSocPercent = 20% -> TargetBatterySocPercent = 60.0%
+        var fakeTime = new FakeTimeProvider(new DateTimeOffset(2026, 11, 12, 20, 0, 0, TimeSpan.FromHours(1)));
+        var options = new SolarForecastOptions
+        {
+            ForecastHours = ["09:00", "11:00", "13:00"],
+            SystemPeakPowerKwp = 5.0,
+            PerformanceRatio = 0.8,
+            ExpectedDailyConsumptionKwh = 10.0,
+            BatteryCapacityKwh = 10.0,
+            MinSocPercent = 20.0,
+            MaxSocPercent = 100.0
+        };
+        var stubClient = new StubWeatherForecastClient(new Dictionary<string, double>
+        {
+            ["09:00"] = 400.0,
+            ["11:00"] = 600.0,
+            ["13:00"] = 500.0
+        });
+
+        var service = new SolarForecastService(stubClient, new StaticOptionsMonitor(options), fakeTime);
+
+        // Act
+        var result = await service.GetTomorrowIrradianceAsync();
+
+        // Assert
+        Assert.Equal(6.0, result.EstimatedProductionKwh);
+        Assert.Equal(60.0, result.TargetBatterySocPercent);
+    }
+
+    [Fact]
+    public async Task GetTomorrowIrradianceAsync_SunnyDay_ReturnsMinSocPercent()
+    {
+        // Arrange: Total irradiance = 3000 W/m2 -> 3.0 * 5.0 * 0.8 = 12.0 kWh (> 10.0 kWh consumption)
+        var fakeTime = new FakeTimeProvider(new DateTimeOffset(2026, 11, 12, 20, 0, 0, TimeSpan.FromHours(1)));
+        var options = new SolarForecastOptions
+        {
+            ForecastHours = ["09:00", "11:00", "13:00"],
+            SystemPeakPowerKwp = 5.0,
+            PerformanceRatio = 0.8,
+            ExpectedDailyConsumptionKwh = 10.0,
+            BatteryCapacityKwh = 10.0,
+            MinSocPercent = 20.0,
+            MaxSocPercent = 100.0
+        };
+        var stubClient = new StubWeatherForecastClient(new Dictionary<string, double>
+        {
+            ["09:00"] = 800.0,
+            ["11:00"] = 1200.0,
+            ["13:00"] = 1000.0
+        });
+
+        var service = new SolarForecastService(stubClient, new StaticOptionsMonitor(options), fakeTime);
+
+        // Act
+        var result = await service.GetTomorrowIrradianceAsync();
+
+        // Assert
+        Assert.Equal(12.0, result.EstimatedProductionKwh);
+        Assert.Equal(20.0, result.TargetBatterySocPercent);
+    }
+
+    [Fact]
+    public async Task GetTomorrowIrradianceAsync_CloudyDay_ClampsToMaxSocPercent()
+    {
+        // Arrange: Total irradiance = 250 W/m2 -> 0.25 * 5.0 * 0.8 = 1.0 kWh
+        // Deficit = 9.0 kWh (90% of 10 kWh battery); 20% + 90% = 110% -> clamped to MaxSocPercent (100%)
+        var fakeTime = new FakeTimeProvider(new DateTimeOffset(2026, 11, 12, 20, 0, 0, TimeSpan.FromHours(1)));
+        var options = new SolarForecastOptions
+        {
+            ForecastHours = ["09:00", "11:00", "13:00"],
+            SystemPeakPowerKwp = 5.0,
+            PerformanceRatio = 0.8,
+            ExpectedDailyConsumptionKwh = 10.0,
+            BatteryCapacityKwh = 10.0,
+            MinSocPercent = 20.0,
+            MaxSocPercent = 100.0
+        };
+        var stubClient = new StubWeatherForecastClient(new Dictionary<string, double>
+        {
+            ["09:00"] = 50.0,
+            ["11:00"] = 100.0,
+            ["13:00"] = 100.0
+        });
+
+        var service = new SolarForecastService(stubClient, new StaticOptionsMonitor(options), fakeTime);
+
+        // Act
+        var result = await service.GetTomorrowIrradianceAsync();
+
+        // Assert
+        Assert.Equal(1.0, result.EstimatedProductionKwh);
+        Assert.Equal(100.0, result.TargetBatterySocPercent);
+    }
+
+    [Fact]
     public async Task OpenMeteoClient_ParsesShortwaveRadiationResponse()
     {
         // Arrange

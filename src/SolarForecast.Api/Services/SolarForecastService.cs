@@ -32,8 +32,9 @@ public sealed class SolarForecastService : ISolarForecastService
     {
         var tomorrow = DateOnly.FromDateTime(_timeProvider.GetLocalNow().DateTime.AddDays(1));
         var hourlyData = await _weatherClient.GetHourlyIrradianceAsync(tomorrow, cancellationToken);
+        var options = _optionsMonitor.CurrentValue;
 
-        var targetHours = _optionsMonitor.CurrentValue.ForecastHours
+        var targetHours = options.ForecastHours
             .Select(NormalizeTimeSlot)
             .Where(t => !string.IsNullOrEmpty(t))
             .ToList();
@@ -45,10 +46,38 @@ public sealed class SolarForecastService : ISolarForecastService
             forecasts.Add(new HourlyIrradianceItem(hour, irradiance));
         }
 
+        var estimatedProductionKwh = CalculateEstimatedProductionKwh(hourlyData.Values, options);
+        var targetBatterySocPercent = CalculateTargetBatterySocPercent(estimatedProductionKwh, options);
+
         return new TomorrowIrradianceResponse(
             Date: tomorrow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             Unit: DefaultUnit,
+            EstimatedProductionKwh: estimatedProductionKwh,
+            TargetBatterySocPercent: targetBatterySocPercent,
             Forecasts: forecasts);
+    }
+
+    private static double CalculateEstimatedProductionKwh(
+        IEnumerable<double> hourlyIrradianceWm2,
+        SolarForecastOptions options)
+    {
+        var totalIrradianceKwhPerM2 = hourlyIrradianceWm2.Sum(irradiance => Math.Max(0.0, irradiance) / 1000.0);
+        var rawProductionKwh = totalIrradianceKwhPerM2 * options.SystemPeakPowerKwp * options.PerformanceRatio;
+        return Math.Round(rawProductionKwh, 2, MidpointRounding.AwayFromZero);
+    }
+
+    private static double CalculateTargetBatterySocPercent(
+        double estimatedProductionKwh,
+        SolarForecastOptions options)
+    {
+        var energyDeficitKwh = Math.Max(0.0, options.ExpectedDailyConsumptionKwh - estimatedProductionKwh);
+        var additionalSocPercent = options.BatteryCapacityKwh > 0.0
+            ? (energyDeficitKwh / options.BatteryCapacityKwh) * 100.0
+            : 0.0;
+
+        var unclampedTargetSoc = options.MinSocPercent + additionalSocPercent;
+        var clampedTargetSoc = Math.Clamp(unclampedTargetSoc, options.MinSocPercent, options.MaxSocPercent);
+        return Math.Round(clampedTargetSoc, 1, MidpointRounding.AwayFromZero);
     }
 
     private static string NormalizeTimeSlot(string rawTime)

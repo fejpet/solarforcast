@@ -20,6 +20,22 @@ Provide a REST API endpoint to query the next day's solar irradiance forecast in
 - **FR-01.2 (Configurable Forecast Time Slots):** Read the requested time slots from the application configuration file (`appsettings.json`). The default configured times must be `09:00`, `11:00`, and `13:00`.
 - **FR-01.3 (Extensible JSON Response Structure):** Return a JSON object containing an array of forecast entries (`time` / `timestamp` and `irradiance` value in `W/m²`) so that the response can be easily extended with additional time slots in the future via configuration alone.
 
+### FR-02: Next-Day Solar Production Estimation (kWh)
+Estimate the total next-day photovoltaic (PV) energy generation in `kWh` based on the full-day hourly solar irradiance forecast and configured solar plant parameters.
+
+- **FR-02.1 (Configurable PV System Parameters):** Read `SystemPeakPowerKwp` (installed peak capacity in `kWp`, default `5.0`) and `PerformanceRatio` (system efficiency factor between `0.0` and `1.0`, default `0.8`) from configuration (`appsettings.json`).
+- **FR-02.2 (Production Formula):** Compute hourly PV energy yield as `(IrradianceWm2 / 1000.0) * SystemPeakPowerKwp * PerformanceRatio` and sum across all 24 hours of tomorrow to obtain `EstimatedProductionKwh`.
+
+### FR-03: Overnight Battery Target SoC Calculation
+Calculate the recommended overnight battery target State of Charge (`TargetSocPercent`) to pre-charge the battery during off-peak hours.
+
+- **FR-03.1 (Configurable Battery & Consumption Parameters):** Read `ExpectedDailyConsumptionKwh` (default `10.0`), `BatteryCapacityKwh` (default `10.0`), `MinSocPercent` (default `20.0`), and `MaxSocPercent` (default `100.0`) from configuration (`appsettings.json`).
+- **FR-03.2 (Energy-Balance Target SoC Formula):**
+  - Compute expected energy deficit: `EnergyDeficitKwh = max(0, ExpectedDailyConsumptionKwh - EstimatedProductionKwh)`.
+  - Convert the deficit into battery percentage points: `AdditionalSocPercent = (EnergyDeficitKwh / BatteryCapacityKwh) * 100.0`.
+  - Compute `TargetSocPercent = clamp(MinSocPercent + AdditionalSocPercent, MinSocPercent, MaxSocPercent)`.
+- **FR-03.3 (REST API Exposure):** Expose the estimated daily production (`kWh`) and calculated overnight `TargetSocPercent` via the REST API (both included in the tomorrow forecast response or via a dedicated battery/energy-plan endpoint).
+
 ---
 
 ## 3. Non-Functional Requirements
@@ -36,11 +52,13 @@ Provide a REST API endpoint to query the next day's solar irradiance forecast in
 - **Open-Meteo Forecast API:** `https://api.open-meteo.com/v1/forecast`
 - **Queried Variable:** Hourly `shortwave_radiation` (`W/m²`).
 
-### 4.2 Expected JSON Response Example (`FR-01`)
+### 4.2 Expected JSON Response Example (`FR-01` – `FR-03`)
 ```json
 {
   "date": "2026-11-13",
   "unit": "W/m2",
+  "estimatedProductionKwh": 6.45,
+  "targetBatterySocPercent": 55.5,
   "forecasts": [
     {
       "time": "09:00",
@@ -62,6 +80,6 @@ Provide a REST API endpoint to query the next day's solar irradiance forecast in
 
 ## 5. Planned Future Requirements
 
-- **Solar Production Calculation (kWh):** Convert irradiance forecasts into estimated PV production (`kWh`).
-- **Overnight Battery Target SoC Calculation:** Calculate target battery `SoC %` using configurable daily/daytime consumption (`kWh`), battery capacity (`kWh`), and `MinSoC` / `MaxSoC` constraints.
-- **MQTT Publication:** Publish forecast and target SoC results to an MQTT broker.
+- **FR-02 (Solar Production Calculation in kWh):** Estimate full-day next-day PV energy production (`kWh`) by summing the hourly solar irradiance across the day and scaling by the configured solar system peak power (`kWp`) and system efficiency (`PerformanceRatio`).
+- **FR-03 (Overnight Battery Target SoC Calculation):** Calculate the required overnight battery target State of Charge (`SoC %`) using an energy-balance model (`ExpectedConsumptionKwh - ForecastedProductionKwh`), mapped to the battery's usable capacity (`BatteryCapacityKwh`) and clamped between `MinSocPercent` and `MaxSocPercent`.
+- **FR-04 (MQTT Publication):** Publish forecast and target SoC results to an MQTT broker.

@@ -1,7 +1,7 @@
 namespace SolarForecast.Api.Configuration;
 
 /// <summary>
-/// Configuration options for the solar irradiance forecast service.
+/// Configuration options for the solar irradiance forecast and battery target SoC calculator.
 /// </summary>
 public sealed class SolarForecastOptions
 {
@@ -32,4 +32,34 @@ public sealed class SolarForecastOptions
     /// Configured via appsettings.json (defaulting to 09:00, 11:00, and 13:00).
     /// </summary>
     public List<string> ForecastHours { get; set; } = [];
+
+    /// <summary>
+    /// Installed peak photovoltaic capacity in kWp.
+    /// </summary>
+    public double SystemPeakPowerKwp { get; set; } = 5.0;
+
+    /// <summary>
+    /// Overall PV system performance ratio / efficiency (0.0 to 1.0).
+    /// </summary>
+    public double PerformanceRatio { get; set; } = 0.8;
+
+    /// <summary>
+    /// Expected household daily energy consumption in kWh.
+    /// </summary>
+    public double ExpectedDailyConsumptionKwh { get; set; } = 10.0;
+
+    /// <summary>
+    /// Total home battery storage capacity in kWh.
+    /// </summary>
+    public double BatteryCapacityKwh { get; set; } = 10.0;
+
+    /// <summary>
+    /// Minimum allowed battery State of Charge percentage (0 to 100).
+    /// </summary>
+    public double MinSocPercent { get; set; } = 20.0;
+
+    /// <summary>
+    /// Maximum allowed battery State of Charge percentage (0 to 100).
+    /// </summary>
+    public double MaxSocPercent { get; set; } = 100.0;
 }
