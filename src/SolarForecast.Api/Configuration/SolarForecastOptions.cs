@@ -29,7 +29,7 @@ public sealed class SolarForecastOptions
 
     /// <summary>
     /// Requested times of day in "HH:mm" format for which tomorrow's solar irradiance forecast is returned.
-    /// Defaults to 09:00, 11:00, and 13:00.
+    /// Configured via appsettings.json (defaulting to 09:00, 11:00, and 13:00).
     /// </summary>
-    public List<string> ForecastHours { get; set; } = ["09:00", "11:00", "13:00"];
+    public List<string> ForecastHours { get; set; } = [];
 }

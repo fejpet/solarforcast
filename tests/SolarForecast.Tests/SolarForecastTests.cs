@@ -10,11 +10,14 @@ namespace SolarForecast.Tests;
 public sealed class SolarForecastTests
 {
     [Fact]
-    public async Task GetTomorrowIrradianceAsync_UsesDefaultConfiguredHours_ReturnsExpectedItems()
+    public async Task GetTomorrowIrradianceAsync_UsesConfiguredHours_ReturnsExpectedItems()
     {
         // Arrange
         var fakeTime = new FakeTimeProvider(new DateTimeOffset(2026, 11, 12, 20, 0, 0, TimeSpan.FromHours(1)));
-        var options = new SolarForecastOptions(); // Default: ["09:00", "11:00", "13:00"]
+        var options = new SolarForecastOptions
+        {
+            ForecastHours = ["09:00", "11:00", "13:00"]
+        };
         var stubClient = new StubWeatherForecastClient(new Dictionary<string, double>
         {
             ["08:00"] = 110.0,

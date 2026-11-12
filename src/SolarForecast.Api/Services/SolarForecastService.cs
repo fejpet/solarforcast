@@ -12,7 +12,6 @@ namespace SolarForecast.Api.Services;
 public sealed class SolarForecastService : ISolarForecastService
 {
     public const string DefaultUnit = "W/m2";
-    private static readonly string[] DefaultForecastHours = ["09:00", "11:00", "13:00"];
 
     private readonly IWeatherForecastClient _weatherClient;
     private readonly IOptionsMonitor<SolarForecastOptions> _optionsMonitor;
@@ -34,12 +33,7 @@ public sealed class SolarForecastService : ISolarForecastService
         var tomorrow = DateOnly.FromDateTime(_timeProvider.GetLocalNow().DateTime.AddDays(1));
         var hourlyData = await _weatherClient.GetHourlyIrradianceAsync(tomorrow, cancellationToken);
 
-        var configuredHours = _optionsMonitor.CurrentValue.ForecastHours;
-        IEnumerable<string> rawHours = configuredHours is { Count: > 0 }
-            ? configuredHours
-            : DefaultForecastHours;
-
-        var targetHours = rawHours
+        var targetHours = _optionsMonitor.CurrentValue.ForecastHours
             .Select(NormalizeTimeSlot)
             .Where(t => !string.IsNullOrEmpty(t))
             .ToList();
